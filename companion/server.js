@@ -13,9 +13,20 @@ import {
   syncClosedBeads,
 } from "./lib/closed-beads.js";
 import { detectITermLaunchCapability, openCommandInITerm, shellQuote } from "./lib/iterm.js";
+import { openCommandInVisibleTerminal, detectTerminalLaunchCapability } from "./lib/terminal.js";
+import { DirectResumeService } from "./core/direct-resume-service.js";
+import {
+  DirectResumeError,
+  ERROR_CODES,
+  PROTOCOL_VERSION,
+} from "./core/protocol.js";
+import {
+  consumePairingToken,
+  ensureLocalConfig,
+} from "./stores/local-config.js";
 
-const HOST = process.env.ISSUE_COMPANION_HOST || "127.0.0.1";
-const PORT = Number(process.env.ISSUE_COMPANION_PORT || 38551);
+const HOST = process.env.DIRECT_RESUME_HOST || process.env.ISSUE_COMPANION_HOST || "127.0.0.1";
+const PORT = Number(process.env.DIRECT_RESUME_PORT || process.env.ISSUE_COMPANION_PORT || 38551);
 const execFileAsync = promisify(execFile);
 const DORG_SCRIPT = "/Users/scott/.agents/skills/drupal-issue-queue/scripts/dorg.py";
 const DASHBOARD_CACHE_TTL_MS = 15_000;
@@ -34,6 +45,7 @@ const ALLOW_ITERM_LAUNCH = (() => {
   return detectITermLaunchCapability();
 })();
 const roots = defaultRoots();
+const directResumeService = new DirectResumeService();
 const cache = new Map();
 const dashboardCache = new Map();
 const remoteIssueCache = new Map();
@@ -46,12 +58,38 @@ const closedBeadSyncState = {
 function jsonResponse(response, statusCode, body) {
   response.writeHead(statusCode, {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Headers": "Authorization, Content-Type, X-Direct-Resume-Pairing-Token, X-Direct-Resume-Token",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Cache-Control": "no-store",
     "Content-Type": "application/json; charset=utf-8",
   });
   response.end(JSON.stringify(body, null, 2));
+}
+
+function errorResponse(response, statusCode, code, message) {
+  jsonResponse(response, statusCode, {
+    ok: false,
+    protocol_version: PROTOCOL_VERSION,
+    error: {
+      code,
+      message,
+    },
+  });
+}
+
+function getBearerToken(request) {
+  const authorization = request.headers.authorization || "";
+  const bearerMatch = authorization.match(/^Bearer\s+(.+)$/i);
+  return String(bearerMatch?.[1] || request.headers["x-direct-resume-token"] || "").trim();
+}
+
+async function requireApiAuth(request, response) {
+  const { config } = await ensureLocalConfig();
+  if (getBearerToken(request) !== config.api_token) {
+    errorResponse(response, 401, ERROR_CODES.UNAUTHORIZED, "Pair the extension with the local companion first.");
+    return null;
+  }
+  return config;
 }
 
 async function readRequestBody(request) {
@@ -316,7 +354,7 @@ const server = http.createServer(async (request, response) => {
   if (request.method === "OPTIONS") {
     response.writeHead(204, {
       "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Allow-Headers": "Authorization, Content-Type, X-Direct-Resume-Pairing-Token, X-Direct-Resume-Token",
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     });
     response.end();
@@ -328,13 +366,100 @@ const server = http.createServer(async (request, response) => {
 
   try {
     if (request.method === "GET" && url.pathname === "/health") {
+      const { config } = await ensureLocalConfig();
+      const canExec = detectTerminalLaunchCapability(config.exec);
       jsonResponse(response, 200, {
         ok: true,
+        protocol_version: PROTOCOL_VERSION,
+        service: "direct-resume",
+        auth_required: true,
+        paired: Boolean(config.api_token),
         workspaceRoot: roots.workspaceRoot,
         capabilities: {
+          can_exec: canExec,
+          terminal: config.exec.terminal,
           canLaunchITerm: ALLOW_ITERM_LAUNCH,
         },
       });
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/pair") {
+      const body = await readRequestBody(request);
+      const token = body.pairing_token || request.headers["x-direct-resume-pairing-token"];
+      const result = await consumePairingToken(token);
+
+      if (!result.ok && result.reason === "expired") {
+        errorResponse(
+          response,
+          401,
+          ERROR_CODES.PAIRING_TOKEN_EXPIRED,
+          "The pairing token expired. Run `npm run setup` again.",
+        );
+        return;
+      }
+
+      if (!result.ok) {
+        errorResponse(response, 401, ERROR_CODES.INVALID_PAIRING_TOKEN, "Invalid pairing token.");
+        return;
+      }
+
+      jsonResponse(response, 200, {
+        ok: true,
+        protocol_version: PROTOCOL_VERSION,
+        api_token: result.config.api_token,
+        machine_id: result.config.machine_id,
+      });
+      return;
+    }
+
+    const apiConfig = url.pathname.startsWith("/api/")
+      ? await requireApiAuth(request, response)
+      : null;
+    if (url.pathname.startsWith("/api/") && !apiConfig) {
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/resolve") {
+      const body = await readRequestBody(request);
+      jsonResponse(response, 200, await directResumeService.resolve(body));
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/link") {
+      const body = await readRequestBody(request);
+      jsonResponse(response, 200, await directResumeService.link(body));
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/resume") {
+      const body = await readRequestBody(request);
+      const result = await directResumeService.resume(body);
+
+      if (result.action.mode === "exec") {
+        if (!detectTerminalLaunchCapability(apiConfig.exec)) {
+          errorResponse(
+            response,
+            403,
+            ERROR_CODES.EXEC_DISABLED,
+            "Terminal execution is disabled. Use copy mode or enable DIRECT_RESUME_EXEC=1.",
+          );
+          return;
+        }
+
+        const opened = await openCommandInVisibleTerminal(result.action.command, apiConfig.exec);
+        jsonResponse(response, 200, {
+          ...result,
+          action: {
+            ...result.action,
+            opened: true,
+            terminal: opened.terminal,
+          },
+        });
+        return;
+      }
+
+      jsonResponse(response, 200, result);
       return;
     }
 
@@ -358,9 +483,9 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (request.method === "POST" && issueMatch && url.pathname.endsWith("/open")) {
-      if (!ALLOW_ITERM_LAUNCH) {
+      if (!detectTerminalLaunchCapability(apiConfig.exec)) {
         jsonResponse(response, 403, {
-          error: "iTerm launching is disabled. Start the companion with ISSUE_COMPANION_ALLOW_ITERM=1 to enable it.",
+          error: "Terminal launching is disabled. Start the companion with DIRECT_RESUME_EXEC=1 to enable it.",
         });
         return;
       }
@@ -369,23 +494,31 @@ const server = http.createServer(async (request, response) => {
       const body = await readRequestBody(request);
       const context = await resolveContext(issueId);
       const command = buildLaunchCommand(context, body);
-      await openCommandInITerm(command);
+      await openCommandInVisibleTerminal(command, apiConfig.exec);
       jsonResponse(response, 200, { ok: true, command });
       return;
     }
 
-    jsonResponse(response, 404, { error: "Not found." });
+    errorResponse(response, 404, ERROR_CODES.NOT_FOUND, "Not found.");
   }
   catch (error) {
-    jsonResponse(response, 500, {
-      error: error instanceof Error ? error.message : "Unknown server error.",
-    });
+    if (error instanceof DirectResumeError) {
+      errorResponse(response, error.statusCode, error.code, error.message);
+      return;
+    }
+
+    errorResponse(
+      response,
+      500,
+      ERROR_CODES.INTERNAL_ERROR,
+      error instanceof Error ? error.message : "Unknown server error.",
+    );
   }
 });
 
 server.listen(PORT, HOST, () => {
   const launchMode = ALLOW_ITERM_LAUNCH ? "enabled" : "disabled";
-  console.log(`Issue companion listening on http://${HOST}:${PORT} (iTerm launch ${launchMode})`);
+  console.log(`Direct Resume companion listening on http://${HOST}:${PORT} (legacy iTerm launch ${launchMode})`);
   void maybeSyncClosedBeads();
   setInterval(() => {
     void maybeSyncClosedBeads();

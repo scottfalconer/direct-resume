@@ -1,21 +1,16 @@
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
 
-const CONFIG_FILE = "config.json";
+import {
+  defaultDirectResumeHome,
+  ensureLocalConfig,
+} from "./local-config.js";
+
 const BINDINGS_FILE = "bindings.json";
 const BINDING_STATES = Object.freeze(["active", "stale", "hidden", "pruned"]);
 
-export function defaultDirectResumeHome() {
-  return process.env.DIRECT_RESUME_HOME || path.join(os.homedir(), ".direct-resume");
-}
-
 export async function ensureLocalStore(options = {}) {
-  const storeDir = options.storeDir || defaultDirectResumeHome();
-  await fs.mkdir(storeDir, { recursive: true, mode: 0o700 });
-
-  const config = await readOrCreateConfig(storeDir, options);
+  const { storeDir, config } = await ensureLocalConfig(options);
   await ensureJsonFile(path.join(storeDir, BINDINGS_FILE), []);
 
   return {
@@ -68,26 +63,6 @@ export async function updateBindingState(binding, state, options = {}) {
 
   await writeJson(bindingsFile, next);
   return next;
-}
-
-async function readOrCreateConfig(storeDir, options) {
-  const configFile = path.join(storeDir, CONFIG_FILE);
-  try {
-    return JSON.parse(await fs.readFile(configFile, "utf8"));
-  }
-  catch (error) {
-    if (!isMissingFile(error)) {
-      throw error;
-    }
-  }
-
-  const config = {
-    protocol_version: 1,
-    machine_id: options.machineId || randomUUID(),
-    created_at: new Date().toISOString(),
-  };
-  await writeJson(configFile, config, 0o600);
-  return config;
 }
 
 async function ensureJsonFile(filePath, value) {

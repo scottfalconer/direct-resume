@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node companion/server.js",
+    "setup": "node companion/setup.js",
     "test": "node --test test/*.test.js",
     "check:companion": "find companion -name '*.js' -print0 | xargs -0 -n1 node --check",
     "check:extension": "node --check extension/background.js && node --check extension/content.js",
