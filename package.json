@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node companion/server.js",
     "test": "node --test test/*.test.js",
-    "check:companion": "node --check companion/server.js && node --check companion/lib/closed-beads.js && node --check companion/lib/issue-context.js && node --check companion/lib/iterm.js",
+    "check:companion": "find companion -name '*.js' -print0 | xargs -0 -n1 node --check",
     "check:extension": "node --check extension/background.js && node --check extension/content.js",
     "audit:closed-beads": "node scripts/sync-closed-beads.js",
     "sync:closed-beads": "node scripts/sync-closed-beads.js --apply"
