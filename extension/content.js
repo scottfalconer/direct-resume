@@ -1,7 +1,6 @@
 (function () {
-  const issueId = extractIssueIdFromPage();
-  const isDashboardPage = isDrupalDashboardPage();
-  if (!issueId && !isDashboardPage) {
+  const pageInput = detectWorkObjectPage();
+  if (!pageInput) {
     return;
   }
 
@@ -10,527 +9,293 @@
     return;
   }
 
-  if (issueId) {
-    const panel = createElement("section", {
-      className: "issue-companion",
-      attributes: { "data-issue-id": issueId },
-    });
-    panel.appendChild(renderHeader(issueId));
-    panel.appendChild(renderStatus("Loading local issue context…"));
-    mountPoint.prepend(panel);
-
-    chrome.runtime.sendMessage(
-      { type: "issue-companion:get-context", issueId },
-      (response) => {
-        panel.replaceChildren(renderHeader(issueId));
-
-        if (!response?.ok) {
-          panel.appendChild(renderError(response?.error || "The extension could not read local issue context."));
-          return;
-        }
-
-        if (response.payload.state === "offline") {
-          panel.appendChild(renderOfflineState(response.payload.startCommand));
-          return;
-        }
-
-        panel.appendChild(renderContext(response.payload.context));
-      },
-    );
-    return;
-  }
-
-  const dashboardPanel = createElement("section", {
-    className: "issue-companion issue-companion--dashboard",
-    attributes: { "data-dashboard-block": "beads" },
+  const panel = createElement("section", {
+    className: "issue-companion",
+    attributes: { "data-direct-resume": "panel" },
   });
-  dashboardPanel.appendChild(renderDashboardHeader());
-  dashboardPanel.appendChild(renderStatus("Loading tracked Beads…"));
-  mountPoint.prepend(dashboardPanel);
+  mountPoint.prepend(panel);
 
-  chrome.runtime.sendMessage(
-    { type: "issue-companion:get-dashboard-beads" },
-    (response) => {
-      dashboardPanel.replaceChildren(renderDashboardHeader());
+  renderLoading();
+  void resolveCurrentPage();
 
-      if (!response?.ok) {
-        dashboardPanel.appendChild(renderError(response?.error || "The extension could not load your tracked issues."));
-        return;
-      }
+  async function resolveCurrentPage() {
+    panel.replaceChildren(renderHeader("Direct Resume", "Checking local sessions"));
+    panel.appendChild(renderStatus("Looking for linked Codex or Claude sessions..."));
 
-      if (response.payload.state === "offline") {
-        dashboardPanel.appendChild(renderOfflineState(response.payload.startCommand));
-        return;
-      }
-
-      dashboardPanel.appendChild(renderDashboard(response.payload.dashboard));
-    },
-  );
-
-  function renderContext(context) {
-    const wrapper = createElement("div", { className: "issue-companion__body" });
-    const summary = createElement("div", { className: "issue-companion__summary" });
-
-    summary.appendChild(renderIdentity(context.primary));
-    summary.appendChild(renderFacts(context.primary));
-    wrapper.appendChild(summary);
-
-    if (context.primary.nextStep) {
-      wrapper.appendChild(renderParagraphSection("Next step", context.primary.nextStep));
-    }
-    if (context.primary.testPlan) {
-      wrapper.appendChild(renderParagraphSection("Test plan", context.primary.testPlan));
-    }
-    if (context.primary.conversationSummary) {
-      wrapper.appendChild(renderParagraphSection("Chat summary", context.primary.conversationSummary));
-    }
-    if (context.primary.lastThreadComment) {
-      wrapper.appendChild(renderParagraphSection("Last thread comment", context.primary.lastThreadComment));
-    }
-
-    wrapper.appendChild(renderCommandSection(context));
-
-    if (context.sessions.length) {
-      wrapper.appendChild(renderSessions(context));
-    }
-    if (context.beads.length) {
-      wrapper.appendChild(renderBeads(context.beads));
-    }
-    if (context.artifacts.length) {
-      wrapper.appendChild(renderArtifacts(context.artifacts));
-    }
-
-    return wrapper;
-  }
-
-  function renderDashboard(dashboard) {
-    const wrapper = createElement("div", { className: "issue-companion__body" });
-    const items = Array.isArray(dashboard.items) ? dashboard.items : [];
-    const openItems = items.filter((item) => !item.isClosed);
-    const closedItems = items.filter((item) => item.isClosed);
-
-    if (!items.length) {
-      wrapper.appendChild(
-        createElement("p", {
-          text: "No actionable Beads are ready right now.",
-        }),
-      );
-      return wrapper;
-    }
-
-    if (openItems.length) {
-      wrapper.appendChild(renderDashboardList(openItems, dashboard));
-    }
-    else {
-      wrapper.appendChild(
-        createElement("p", {
-          text: "All currently tracked Beads appear to be closed upstream.",
-        }),
-      );
-    }
-
-    if (closedItems.length) {
-      const details = createElement("details", { className: "issue-companion__details" });
-      details.appendChild(
-        createElement("summary", {
-          text: `Upstream closed (${closedItems.length})`,
-        }),
-      );
-      details.appendChild(
-        createElement("div", {
-          className: "issue-companion__artifact-note",
-          text: "These stay hidden from the main list. The companion checks for upstream-closed issues periodically and closes stale local Beads automatically; run `npm run sync:closed-beads` if you want to force a manual sync now.",
-        }),
-      );
-      details.appendChild(renderDashboardList(closedItems, dashboard));
-      wrapper.appendChild(details);
-    }
-
-    return wrapper;
-  }
-
-  function renderDashboardList(items, dashboard) {
-    const list = createElement("div", { className: "issue-companion__dashboard-list" });
-    items.forEach((item) => {
-      const row = createElement("article", { className: "issue-companion__dashboard-item" });
-      const titleRow = createElement("div", { className: "issue-companion__dashboard-title-row" });
-      const titleLink = createLink(item.title, item.issueUrl);
-      titleLink.classList.add("issue-companion__dashboard-title");
-      titleRow.appendChild(titleLink);
-
-      const badges = createElement("div", { className: "issue-companion__meta-row" });
-      if (item.upstreamStatus) {
-        badges.appendChild(createBadge(item.upstreamStatus, "status"));
-      }
-      if (item.localStatus) {
-        badges.appendChild(createPill(`Beads: ${item.localStatus}`));
-      }
-      titleRow.appendChild(badges);
-      row.appendChild(titleRow);
-
-      row.appendChild(
-        createElement("div", {
-          className: "issue-companion__list-meta",
-          text: `#${item.issueId}${item.upstreamUpdatedAt ? ` • upstream updated ${formatDate(item.upstreamUpdatedAt)}` : ""}`,
-        }),
-      );
-
-      if (item.conversationSummary) {
-        row.appendChild(
-          createElement("p", {
-            className: "issue-companion__dashboard-summary",
-            text: item.conversationSummary,
-          }),
-        );
-      }
-
-      if (item.nextStep) {
-        row.appendChild(
-          createElement("div", {
-            className: "issue-companion__artifact-note",
-            text: `Next step: ${item.nextStep}`,
-          }),
-        );
-      }
-
-      if (item.latestComment?.body) {
-        row.appendChild(
-          createElement("div", {
-            className: "issue-companion__comment",
-            text: `Last comment${item.latestComment.author ? ` · ${item.latestComment.author}` : ""}: ${item.latestComment.body}`,
-          }),
-        );
-      }
-
-      if (item.suggestedCommand) {
-        const actions = createElement("div", { className: "issue-companion__actions" });
-        actions.appendChild(
-          createButton("Copy resume", async () => {
-            await navigator.clipboard.writeText(item.suggestedCommand);
-          }),
-        );
-        if (item.suggestedAction && dashboard.capabilities?.canLaunchITerm) {
-          actions.appendChild(
-            createButton("Open in iTerm", async () => {
-              await sendRuntimeMessage({
-                type: "issue-companion:open-action",
-                issueId: item.issueId,
-                action: item.suggestedAction,
-              });
-            }),
-          );
-        }
-        row.appendChild(actions);
-      }
-
-      list.appendChild(row);
+    const response = await sendRuntimeMessage({
+      type: "direct-resume:resolve",
+      input: pageInput,
     });
-    return list;
+
+    if (response.state === "offline") {
+      renderOfflineState(response);
+      return;
+    }
+
+    if (response.state === "unpaired") {
+      renderPairingState(response);
+      return;
+    }
+
+    renderResolveResult(response.result, response.health);
   }
 
-  function renderIdentity(primary) {
-    const block = createElement("div", { className: "issue-companion__identity" });
-    block.appendChild(createElement("h3", { text: primary.title }));
-
-    const meta = createElement("div", { className: "issue-companion__meta-row" });
-    if (primary.status) {
-      meta.appendChild(createBadge(primary.status));
-    }
-    if (primary.issueType) {
-      meta.appendChild(createPill(primary.issueType));
-    }
-    if (primary.updatedAt) {
-      meta.appendChild(createPill(`Updated ${formatDate(primary.updatedAt)}`));
-    }
-    block.appendChild(meta);
-
-    const links = createElement("div", { className: "issue-companion__links" });
-    links.appendChild(createLink("Issue", primary.issueUrl));
-    if (primary.mrUrl) {
-      links.appendChild(createLink("MR", primary.mrUrl));
-    }
-    block.appendChild(links);
-
-    return block;
+  function renderLoading() {
+    panel.replaceChildren(renderHeader("Direct Resume", "Loading"));
+    panel.appendChild(renderStatus("Loading local companion state..."));
   }
 
-  function renderFacts(primary) {
-    const facts = createElement("dl", { className: "issue-companion__facts" });
-    if (primary.intent) {
-      facts.appendChild(createElement("dt", { text: "Intent" }));
-      facts.appendChild(createElement("dd", { text: primary.intent }));
+  function renderResolveResult(result, health) {
+    const workObject = result.work_object;
+    const candidates = Array.isArray(result.candidates) ? result.candidates : [];
+    panel.replaceChildren(renderHeader("Direct Resume", stateLabel(result.state)));
+
+    const body = createElement("div", { className: "issue-companion__body" });
+    body.appendChild(renderWorkObject(workObject));
+
+    if (result.state === "unsupported") {
+      body.appendChild(renderParagraphSection("Unsupported page", "This page is not a supported Drupal.org or Jira issue URL."));
+      panel.appendChild(body);
+      return;
     }
-    facts.appendChild(createElement("dt", { text: "Suggested command" }));
-    facts.appendChild(
-      createElement("dd", {
-        text: primary.suggestedCommand || "No resume command found yet.",
-      }),
-    );
-    return facts;
-  }
 
-  function renderParagraphSection(label, text) {
-    const section = createElement("section", { className: "issue-companion__section" });
-    section.appendChild(createElement("h4", { text: label }));
-    section.appendChild(createElement("p", { text }));
-    return section;
-  }
-
-  function renderCommandSection(context) {
-    const section = createElement("section", { className: "issue-companion__section" });
-    section.appendChild(createElement("h4", { text: "Resume" }));
-
-    const command = context.primary.suggestedCommand;
-    if (command) {
-      section.appendChild(renderCommandCard(command, context.primary.suggestedAction, context));
+    if (!candidates.length) {
+      body.appendChild(renderParagraphSection("No linked session", "Link the current Codex or Claude session once, then this page becomes a direct resume point."));
     }
     else {
-      section.appendChild(
-        createElement("p", {
-          text: "No launcher script or Codex session matched this issue yet.",
-        }),
-      );
+      const section = createElement("section", { className: "issue-companion__section" });
+      section.appendChild(createElement("h4", { text: candidates.length === 1 ? "Best match" : "Resume candidates" }));
+      const stack = createElement("div", { className: "issue-companion__stack" });
+      candidates.forEach((candidate) => {
+        stack.appendChild(renderCandidate(candidate, health));
+      });
+      section.appendChild(stack);
+      body.appendChild(section);
     }
-
-    return section;
-  }
-
-  function renderCommandCard(command, action, context) {
-    const card = createElement("div", { className: "issue-companion__command-card" });
-    card.appendChild(createElement("code", { className: "issue-companion__command", text: command }));
 
     const actions = createElement("div", { className: "issue-companion__actions" });
-    actions.appendChild(
-      createButton("Copy", async () => {
-        await navigator.clipboard.writeText(command);
-      }),
-    );
+    actions.appendChild(createButton("Link current session", () => linkCurrentSession()));
+    actions.appendChild(createButton("Refresh", () => resolveCurrentPage()));
+    body.appendChild(actions);
+    panel.appendChild(body);
+  }
 
-    if (action && context.capabilities.canLaunchITerm) {
-      actions.appendChild(
-        createButton("Open in iTerm", async () => {
-          await sendRuntimeMessage({
-            type: "issue-companion:open-action",
-            issueId: context.issueId,
-            action,
-          });
-        }),
-      );
+  function renderWorkObject(workObject) {
+    const section = createElement("section", { className: "issue-companion__summary" });
+    const identity = createElement("div", { className: "issue-companion__identity" });
+    identity.appendChild(createElement("h3", { text: workObject?.display_title || document.title || "Current work object" }));
+
+    const links = createElement("div", { className: "issue-companion__links" });
+    if (workObject?.canonical_url) {
+      links.appendChild(createLink("Canonical issue", workObject.canonical_url));
+    }
+    identity.appendChild(links);
+    section.appendChild(identity);
+
+    const facts = createElement("dl", { className: "issue-companion__facts" });
+    facts.appendChild(createElement("dt", { text: "Anchor" }));
+    facts.appendChild(createElement("dd", { text: workObject?.canonical_id || "Not supported" }));
+    facts.appendChild(createElement("dt", { text: "Source" }));
+    facts.appendChild(createElement("dd", { text: workObject?.source || "unknown" }));
+    section.appendChild(facts);
+    return section;
+  }
+
+  function renderCandidate(candidate, health) {
+    const card = createElement("article", { className: "issue-companion__list-card" });
+    card.appendChild(createElement("div", {
+      className: "issue-companion__list-title",
+      text: `${agentLabel(candidate.agent)}: ${candidate.label}`,
+    }));
+    card.appendChild(createElement("div", {
+      className: "issue-companion__list-meta",
+      text: `${candidate.match_type} match • confidence ${Math.round(candidate.confidence * 100)}%${candidate.last_seen_at ? ` • ${formatDate(candidate.last_seen_at)}` : ""}`,
+    }));
+
+    if (candidate.summary) {
+      card.appendChild(createElement("p", { text: candidate.summary }));
+    }
+    if (candidate.workspace_path) {
+      card.appendChild(createElement("code", {
+        className: "issue-companion__path",
+        text: candidate.workspace_path,
+      }));
     }
 
+    const actions = createElement("div", { className: "issue-companion__actions" });
+    actions.appendChild(createButton("Copy resume", () => resumeCandidate(candidate, "copy")));
+    if (health?.capabilities?.can_exec) {
+      actions.appendChild(createButton("Open terminal", () => resumeCandidate(candidate, "exec")));
+    }
     card.appendChild(actions);
     return card;
   }
 
-  function renderSessions(context) {
-    const details = createElement("details", {
-      className: "issue-companion__details",
-      attributes: { open: "open" },
+  async function resumeCandidate(candidate, mode) {
+    const response = await sendRuntimeMessage({
+      type: "direct-resume:resume",
+      candidateRef: candidate.candidate_ref,
+      mode,
     });
-    details.appendChild(
-      createElement("summary", {
-        text: `Related Codex sessions (${context.sessions.length})`,
-      }),
-    );
 
-    const list = createElement("div", { className: "issue-companion__stack" });
-    context.sessions.forEach((session) => {
-      const row = createElement("div", { className: "issue-companion__list-card" });
-      row.appendChild(createElement("div", { className: "issue-companion__list-title", text: session.sessionId }));
-      row.appendChild(
-        createElement("div", {
-          className: "issue-companion__list-meta",
-          text: `${session.mentionCount} prompts • last mentioned ${formatDate(session.lastMentionedAt)}`,
-        }),
-      );
-      row.appendChild(
-        createElement("div", {
-          className: "issue-companion__artifact-note",
-          text: `Chat summary: ${session.firstPrompt}`,
-        }),
-      );
-      if (session.lastPrompt && session.lastPrompt !== session.firstPrompt) {
-        row.appendChild(
-          createElement("div", {
-            className: "issue-companion__comment",
-            text: `Last prompt: ${session.lastPrompt}`,
-          }),
-        );
-      }
-      row.appendChild(renderCommandCard(session.command, {
-        type: "codex-session",
-        label: "Resume session",
-        sessionId: session.sessionId,
-      }, context));
-      list.appendChild(row);
-    });
-    details.appendChild(list);
+    if (response.state !== "ready") {
+      throw new Error(response.error || `Companion returned ${response.state}.`);
+    }
 
-    return details;
+    const action = response.result.action;
+    if (action.type === "copy_command") {
+      await navigator.clipboard.writeText(action.command);
+    }
   }
 
-  function renderBeads(beads) {
-    const details = createElement("details", { className: "issue-companion__details" });
-    details.appendChild(createElement("summary", { text: `Beads notes (${beads.length})` }));
+  async function linkCurrentSession() {
+    const agent = prompt("Agent to link: codex or claude", "codex");
+    if (!agent) {
+      return;
+    }
 
-    const list = createElement("div", { className: "issue-companion__stack" });
-    beads.forEach((bead) => {
-      const row = createElement("div", { className: "issue-companion__list-card" });
-      row.appendChild(createElement("div", { className: "issue-companion__list-title", text: bead.title }));
-      row.appendChild(
-        createElement("div", {
-          className: "issue-companion__list-meta",
-          text: `${bead.beadId} • ${bead.status || "unknown status"} • ${bead.updatedAt ? formatDate(bead.updatedAt) : "unknown date"}`,
-        }),
-      );
-      if (bead.conversationSummary) {
-        row.appendChild(
-          createElement("div", {
-            className: "issue-companion__artifact-note",
-            text: `Chat summary: ${bead.conversationSummary}`,
-          }),
-        );
-      }
-      if (bead.lastThreadComment) {
-        row.appendChild(
-          createElement("div", {
-            className: "issue-companion__comment",
-            text: `Last thread comment: ${bead.lastThreadComment}`,
-          }),
-        );
-      }
-      if (bead.descriptionFields.nextStep) {
-        row.appendChild(createElement("p", { text: bead.descriptionFields.nextStep }));
-      }
-      bead.comments
-        .filter((comment) => comment.text !== bead.lastThreadComment)
-        .forEach((comment) => {
-        row.appendChild(
-          createElement("div", {
-            className: "issue-companion__comment",
-            text: `${comment.createdAt ? formatDate(comment.createdAt) : "Unknown date"}: ${comment.text}`,
-          }),
-        );
-        });
-      list.appendChild(row);
+    const resumeText = prompt("Paste the session id or resume command");
+    if (!resumeText) {
+      return;
+    }
+
+    const workspacePath = prompt("Local workspace path for this session");
+    if (!workspacePath) {
+      return;
+    }
+
+    const response = await sendRuntimeMessage({
+      type: "direct-resume:link",
+      input: {
+        ...pageInput,
+        agent: agent.trim().toLowerCase(),
+        resume_text: resumeText.trim(),
+        workspace_path: workspacePath.trim(),
+      },
     });
-    details.appendChild(list);
 
-    return details;
+    if (response.state !== "ready") {
+      throw new Error(response.error || `Link failed with state ${response.state}.`);
+    }
+
+    renderResolveResult(response.result.resolved, response.health);
   }
 
-  function renderArtifacts(artifacts) {
-    const details = createElement("details", { className: "issue-companion__details" });
-    details.appendChild(createElement("summary", { text: `Local artifacts (${artifacts.length})` }));
-
-    const list = createElement("div", { className: "issue-companion__stack" });
-    artifacts.forEach((artifact) => {
-      const row = createElement("div", { className: "issue-companion__list-card" });
-      row.appendChild(createElement("div", { className: "issue-companion__list-title", text: artifact.slug }));
-      row.appendChild(
-        createElement("div", {
-          className: "issue-companion__list-meta",
-          text: `${artifact.workflow.workflowMode || "workflow unknown"} • ${formatDate(artifact.updatedAt)}`,
-        }),
-      );
-      if (artifact.workflow.mrUrls.length) {
-        const links = createElement("div", { className: "issue-companion__links" });
-        artifact.workflow.mrUrls.forEach((url, index) => {
-          links.appendChild(createLink(`MR ${index + 1}`, url));
-        });
-        row.appendChild(links);
+  function renderPairingState(response) {
+    panel.replaceChildren(renderHeader("Direct Resume", "Pair extension"));
+    const body = createElement("section", { className: "issue-companion__offline" });
+    body.appendChild(createElement("h3", { text: "Pair with the local companion" }));
+    body.appendChild(createElement("p", {
+      text: "Run setup locally, paste the one-time token here, then reload this page.",
+    }));
+    body.appendChild(renderCommandCard(response.setupCommand || "npm run setup"));
+    body.appendChild(createButton("Enter pairing token", async () => {
+      const token = prompt("Pairing token from `npm run setup`");
+      if (!token) {
+        return;
       }
-      if (artifact.reportPreview) {
-        row.appendChild(createElement("p", { text: artifact.reportPreview }));
+      const pairResponse = await sendRuntimeMessage({
+        type: "direct-resume:pair",
+        pairingToken: token,
+      });
+      if (pairResponse.state !== "paired") {
+        throw new Error(pairResponse.error || "Pairing failed.");
       }
-      if (artifact.issueCommentPreview) {
-      row.appendChild(
-        createElement("div", {
-          className: "issue-companion__artifact-note",
-          text: `Comment draft: ${artifact.issueCommentPreview}`,
-          }),
-        );
-      }
-      if (artifact.diffFiles.length || artifact.patchFiles.length) {
-        row.appendChild(
-          createElement("div", {
-            className: "issue-companion__artifact-note",
-            text: `Diffs: ${artifact.diffFiles.join(", ") || "none"} • Patches: ${artifact.patchFiles.join(", ") || "none"}`,
-          }),
-        );
-      }
-      row.appendChild(
-        createElement("code", {
-          className: "issue-companion__path",
-          text: artifact.path,
-        }),
-      );
-      list.appendChild(row);
-    });
-    details.appendChild(list);
-
-    return details;
+      await resolveCurrentPage();
+    }));
+    panel.appendChild(body);
   }
 
-  function renderOfflineState(startCommand) {
-    const section = createElement("section", { className: "issue-companion__offline" });
-    section.appendChild(createElement("h3", { text: "Local companion required" }));
-    section.appendChild(
-      createElement("p", {
-        text: "When working in /Users/scott/dev/drupal-contrib, keep the companion running so Drupal.org issues show local Beads, artifact, and Codex session context.",
-      }),
-    );
-    section.appendChild(
-      createElement("p", {
-        text: "Start it in the project below, then reload this issue page.",
-      }),
-    );
+  function renderOfflineState(response) {
+    panel.replaceChildren(renderHeader("Direct Resume", "Companion offline"));
+    const body = createElement("section", { className: "issue-companion__offline" });
+    body.appendChild(createElement("h3", { text: "Start the local companion" }));
+    body.appendChild(createElement("p", {
+      text: "Direct Resume runs local-first. Start the companion, then reload this page.",
+    }));
+    body.appendChild(renderCommandCard(response.startCommand || "npm start"));
+    body.appendChild(createElement("p", {
+      text: "If this is your first run, use setup first so the extension can pair with the companion.",
+    }));
+    body.appendChild(renderCommandCard(response.setupCommand || "npm run setup"));
+    panel.appendChild(body);
+  }
+
+  function renderCommandCard(command) {
     const card = createElement("div", { className: "issue-companion__command-card" });
-    card.appendChild(createElement("code", { className: "issue-companion__command", text: startCommand }));
+    card.appendChild(createElement("code", { className: "issue-companion__command", text: command }));
     const actions = createElement("div", { className: "issue-companion__actions" });
-    actions.appendChild(
-      createButton("Copy", async () => {
-        await navigator.clipboard.writeText(startCommand);
-      }),
-    );
+    actions.appendChild(createButton("Copy", () => navigator.clipboard.writeText(command)));
     card.appendChild(actions);
-    section.appendChild(card);
-    return section;
-  }
-
-  function renderError(message) {
-    return createElement("div", {
-      className: "issue-companion__error",
-      text: message,
-    });
-  }
-
-  function renderHeader(currentIssueId) {
-    const header = createElement("div", { className: "issue-companion__header" });
-    header.appendChild(createElement("h2", { text: "Local Issue Context" }));
-    header.appendChild(createElement("span", { className: "issue-companion__issue-id", text: `#${currentIssueId}` }));
-    return header;
-  }
-
-  function renderDashboardHeader() {
-    const header = createElement("div", { className: "issue-companion__header" });
-    header.appendChild(createElement("h2", { text: "My Beads" }));
-    header.appendChild(createElement("span", { className: "issue-companion__issue-id", text: "Tracked issues" }));
-    return header;
-  }
-
-  function renderStatus(message) {
-    return createElement("div", { className: "issue-companion__status", text: message });
+    return card;
   }
 })();
 
-function extractIssueIdFromPage() {
-  const pathMatch = window.location.pathname.match(/^\/project\/[^/]+\/issues\/(\d+)/);
-  return pathMatch ? pathMatch[1] : null;
+function detectWorkObjectPage() {
+  const metadata = pageMetadata();
+  const href = window.location.href;
+
+  if (
+    window.location.hostname === "www.drupal.org" &&
+    (
+      /^\/project\/[^/]+\/issues\/\d+/.test(window.location.pathname) ||
+      /^\/node\/\d+/.test(window.location.pathname)
+    )
+  ) {
+    return {
+      url: href,
+      page_title: document.title,
+      metadata,
+    };
+  }
+
+  if (window.location.hostname.endsWith(".atlassian.net")) {
+    const issueKey = extractJiraIssueKey();
+    if (/^\/browse\/[A-Za-z][A-Za-z0-9]+-\d+/.test(window.location.pathname) || issueKey) {
+      return {
+        url: href,
+        page_title: document.title,
+        metadata: {
+          ...metadata,
+          issue_key: issueKey,
+        },
+      };
+    }
+  }
+
+  return null;
 }
 
-function isDrupalDashboardPage() {
-  return window.location.pathname === "/dashboard";
+function pageMetadata() {
+  return {
+    canonical_url: document.querySelector('link[rel="canonical"]')?.href || null,
+    og_url: document.querySelector('meta[property="og:url"]')?.content || null,
+    title: document.title || null,
+  };
+}
+
+function extractJiraIssueKey() {
+  const pathMatch = window.location.pathname.match(/\/browse\/([A-Za-z][A-Za-z0-9]+-\d+)/);
+  if (pathMatch) {
+    return pathMatch[1].toUpperCase();
+  }
+
+  const selectors = [
+    "[data-issue-key]",
+    "[data-testid='issue.views.issue-base.foundation.breadcrumbs.current-issue.item']",
+    "meta[name='ajs-issue-key']",
+  ];
+  for (const selector of selectors) {
+    const element = document.querySelector(selector);
+    const value = element?.getAttribute("data-issue-key") || element?.getAttribute("content") || element?.textContent;
+    const match = String(value || "").match(/\b([A-Za-z][A-Za-z0-9]+-\d+)\b/);
+    if (match) {
+      return match[1].toUpperCase();
+    }
+  }
+
+  const titleMatch = document.title.match(/\b([A-Za-z][A-Za-z0-9]+-\d+)\b/);
+  return titleMatch ? titleMatch[1].toUpperCase() : null;
 }
 
 function findMountPoint() {
@@ -544,6 +309,7 @@ function findMountPoint() {
     "#content",
     "#main",
     ".dialog-off-canvas-main-canvas",
+    "body",
   ];
 
   for (const selector of selectors) {
@@ -554,6 +320,24 @@ function findMountPoint() {
   }
 
   return null;
+}
+
+function renderHeader(title, state) {
+  const header = createElement("div", { className: "issue-companion__header" });
+  header.appendChild(createElement("h2", { text: title }));
+  header.appendChild(createElement("span", { className: "issue-companion__issue-id", text: state }));
+  return header;
+}
+
+function renderParagraphSection(label, text) {
+  const section = createElement("section", { className: "issue-companion__section" });
+  section.appendChild(createElement("h4", { text: label }));
+  section.appendChild(createElement("p", { text }));
+  return section;
+}
+
+function renderStatus(message) {
+  return createElement("div", { className: "issue-companion__status", text: message });
 }
 
 function createElement(tagName, options = {}) {
@@ -580,25 +364,6 @@ function createLink(label, href) {
   return link;
 }
 
-function createBadge(text, variant = "default") {
-  const badge = createElement("span", {
-    className: "issue-companion__badge",
-    text,
-  });
-  if (variant === "status") {
-    badge.classList.add("issue-companion__badge--status");
-    badge.classList.add(`issue-companion__badge--${slugifyStatus(text)}`);
-  }
-  return badge;
-}
-
-function createPill(text) {
-  return createElement("span", {
-    className: "issue-companion__pill",
-    text,
-  });
-}
-
 function createButton(label, handler) {
   const button = createElement("button", {
     className: "issue-companion__button",
@@ -611,7 +376,7 @@ function createButton(label, handler) {
 
     try {
       await handler();
-      button.textContent = label === "Copy" ? "Copied" : "Opened";
+      button.textContent = label.startsWith("Copy") ? "Copied" : "Done";
       window.setTimeout(() => {
         button.textContent = originalText;
       }, 1200);
@@ -622,6 +387,7 @@ function createButton(label, handler) {
         button.textContent = originalText;
       }, 1600);
       console.error(error);
+      alert(error instanceof Error ? error.message : String(error));
     }
     finally {
       window.setTimeout(() => {
@@ -630,26 +396,6 @@ function createButton(label, handler) {
     }
   });
   return button;
-}
-
-function formatDate(value) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "unknown date";
-  }
-
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
-}
-
-function slugifyStatus(value) {
-  return String(value || "")
-    .toLowerCase()
-    .replace(/&/g, "and")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "") || "unknown";
 }
 
 function sendRuntimeMessage(message) {
@@ -662,4 +408,33 @@ function sendRuntimeMessage(message) {
       resolve(response.payload);
     });
   });
+}
+
+function stateLabel(state) {
+  if (state === "one_match") {
+    return "Ready";
+  }
+  if (state === "multiple_matches") {
+    return "Choose session";
+  }
+  if (state === "no_match") {
+    return "No match";
+  }
+  return "Unsupported";
+}
+
+function agentLabel(agent) {
+  return agent === "claude" ? "Claude Code" : "Codex";
+}
+
+function formatDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "unknown date";
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
 }

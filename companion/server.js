@@ -35,6 +35,7 @@ const CLOSED_BEAD_SYNC_INTERVAL_MS = Math.max(
   60_000,
   Number(process.env.ISSUE_COMPANION_CLOSED_BEAD_SYNC_INTERVAL_MS || 60 * 60 * 1000),
 );
+const DISABLE_LEGACY_SYNC = process.env.DIRECT_RESUME_DISABLE_LEGACY_SYNC === "1";
 const ALLOW_ITERM_LAUNCH = (() => {
   if (process.env.ISSUE_COMPANION_ALLOW_ITERM === "0") {
     return false;
@@ -519,8 +520,10 @@ const server = http.createServer(async (request, response) => {
 server.listen(PORT, HOST, () => {
   const launchMode = ALLOW_ITERM_LAUNCH ? "enabled" : "disabled";
   console.log(`Direct Resume companion listening on http://${HOST}:${PORT} (legacy iTerm launch ${launchMode})`);
-  void maybeSyncClosedBeads();
-  setInterval(() => {
+  if (!DISABLE_LEGACY_SYNC) {
     void maybeSyncClosedBeads();
-  }, CLOSED_BEAD_SYNC_INTERVAL_MS);
+    setInterval(() => {
+      void maybeSyncClosedBeads();
+    }, CLOSED_BEAD_SYNC_INTERVAL_MS);
+  }
 });

@@ -3,8 +3,9 @@ const COMPANION_BASE_URLS = [
   "http://localhost:38551",
 ];
 
-const OFFLINE_START_COMMAND =
-  "cd /Users/scott/dev/direct-resume && npm start";
+const STORAGE_TOKEN_KEY = "direct_resume_api_token";
+const OFFLINE_START_COMMAND = "cd /Users/scott/dev/direct-resume && npm start";
+const SETUP_COMMAND = "cd /Users/scott/dev/direct-resume && npm run setup";
 
 async function findHealthyCompanion() {
   for (const baseUrl of COMPANION_BASE_URLS) {
@@ -37,79 +38,133 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 async function handleMessage(message) {
-  if (message.type === "issue-companion:get-context") {
-    const issueId = String(message.issueId || "");
-    const companion = await findHealthyCompanion();
-
-    if (!companion) {
-      return {
-        state: "offline",
-        issueId,
-        startCommand: OFFLINE_START_COMMAND,
-      };
-    }
-
-    const response = await fetch(`${companion.baseUrl}/api/issues/${issueId}`, {
-      cache: "no-store",
-    });
-    if (!response.ok) {
-      throw new Error(`Companion lookup failed with status ${response.status}.`);
-    }
-
-    return {
-      state: "ready",
-      baseUrl: companion.baseUrl,
-      health: companion.health,
-      context: await response.json(),
-    };
+  if (message.type === "direct-resume:pair") {
+    return pairExtension(message.pairingToken);
   }
 
-  if (message.type === "issue-companion:get-dashboard-beads") {
-    const companion = await findHealthyCompanion();
-
-    if (!companion) {
-      return {
-        state: "offline",
-        startCommand: OFFLINE_START_COMMAND,
-      };
-    }
-
-    const response = await fetch(`${companion.baseUrl}/api/dashboard/beads`, {
-      cache: "no-store",
-    });
-    if (!response.ok) {
-      throw new Error(`Dashboard lookup failed with status ${response.status}.`);
-    }
-
-    return {
-      state: "ready",
-      baseUrl: companion.baseUrl,
-      health: companion.health,
-      dashboard: await response.json(),
-    };
+  if (message.type === "direct-resume:resolve") {
+    return companionPost("/api/resolve", message.input);
   }
 
-  if (message.type === "issue-companion:open-action") {
-    const companion = await findHealthyCompanion();
-    if (!companion) {
-      throw new Error("The local companion is not running.");
-    }
+  if (message.type === "direct-resume:link") {
+    return companionPost("/api/link", message.input);
+  }
 
-    const response = await fetch(`${companion.baseUrl}/api/issues/${message.issueId}/open`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(message.action),
+  if (message.type === "direct-resume:resume") {
+    return companionPost("/api/resume", {
+      candidate_ref: message.candidateRef,
+      mode: message.mode || "copy",
     });
-
-    const payload = await response.json();
-    if (!response.ok) {
-      throw new Error(payload.error || `Launch request failed with status ${response.status}.`);
-    }
-
-    return payload;
   }
 
   throw new Error("Unsupported message type.");
+}
+
+async function pairExtension(pairingToken) {
+  const companion = await findHealthyCompanion();
+  if (!companion) {
+    return offlineState();
+  }
+
+  const response = await fetch(`${companion.baseUrl}/api/pair`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      protocol_version: 1,
+      pairing_token: String(pairingToken || "").trim(),
+    }),
+  });
+  const payload = await response.json();
+  if (!response.ok) {
+    return {
+      state: "pair_failed",
+      error: payload.error?.message || `Pairing failed with status ${response.status}.`,
+      setupCommand: SETUP_COMMAND,
+    };
+  }
+
+  await chromeStorageSet({ [STORAGE_TOKEN_KEY]: payload.api_token });
+  return {
+    state: "paired",
+    baseUrl: companion.baseUrl,
+    health: companion.health,
+  };
+}
+
+async function companionPost(path, body) {
+  const companion = await findHealthyCompanion();
+  if (!companion) {
+    return offlineState();
+  }
+
+  const token = await getApiToken();
+  if (!token) {
+    return {
+      state: "unpaired",
+      baseUrl: companion.baseUrl,
+      health: companion.health,
+      setupCommand: SETUP_COMMAND,
+    };
+  }
+
+  const response = await fetch(`${companion.baseUrl}${path}`, {
+    method: "POST",
+    cache: "no-store",
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      protocol_version: 1,
+      ...body,
+    }),
+  });
+  const payload = await response.json();
+
+  if (response.status === 401) {
+    await chromeStorageSet({ [STORAGE_TOKEN_KEY]: null });
+    return {
+      state: "unpaired",
+      error: payload.error?.message || "Pair the extension with the local companion.",
+      setupCommand: SETUP_COMMAND,
+    };
+  }
+
+  if (!response.ok) {
+    throw new Error(payload.error?.message || `Companion request failed with status ${response.status}.`);
+  }
+
+  return {
+    state: "ready",
+    baseUrl: companion.baseUrl,
+    health: companion.health,
+    result: payload,
+  };
+}
+
+async function getApiToken() {
+  const values = await chromeStorageGet(STORAGE_TOKEN_KEY);
+  return values[STORAGE_TOKEN_KEY] || null;
+}
+
+function offlineState() {
+  return {
+    state: "offline",
+    startCommand: OFFLINE_START_COMMAND,
+    setupCommand: SETUP_COMMAND,
+  };
+}
+
+function chromeStorageGet(keys) {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(keys, resolve);
+  });
+}
+
+function chromeStorageSet(values) {
+  return new Promise((resolve) => {
+    chrome.storage.local.set(values, resolve);
+  });
 }

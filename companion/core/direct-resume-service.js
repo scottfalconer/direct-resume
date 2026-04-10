@@ -43,10 +43,11 @@ export class DirectResumeService {
     const aliases = connector.aliases(workObject);
     const explicitCandidates = await this.explicitBindingCandidates(workObject);
     const discoveredCandidates = await this.discoverCandidates(workObject, aliases);
+    const candidatesToRank = mergeSessionCandidates([...explicitCandidates, ...discoveredCandidates]);
     const explicitSessionIds = explicitCandidates.map((candidate) => candidate.session_id);
     const ranked = rankCandidates(
       workObject,
-      [...explicitCandidates, ...discoveredCandidates],
+      candidatesToRank,
       { explicitSessionIds },
     );
     const candidates = ranked.slice(0, 8).map((candidate) => this.cacheCandidate(candidate));
@@ -242,6 +243,33 @@ function publicCandidate(candidate) {
       source: item.source,
     })),
   };
+}
+
+function mergeSessionCandidates(candidates) {
+  const bySession = new Map();
+
+  for (const candidate of candidates) {
+    const key = `${candidate.agent}:${candidate.session_id}`;
+    const existing = bySession.get(key);
+    if (!existing) {
+      bySession.set(key, { ...candidate, evidence: [...(candidate.evidence || [])] });
+      continue;
+    }
+
+    existing.evidence.push(...(candidate.evidence || []));
+    existing.binding ||= candidate.binding;
+    existing.liveness ||= candidate.liveness;
+    existing.workspace_path ||= candidate.workspace_path;
+    existing.summary ||= candidate.summary;
+    if (candidate.label && (!existing.label || existing.match_type !== "explicit")) {
+      existing.label = candidate.label;
+    }
+    if (String(candidate.last_seen_at || "") > String(existing.last_seen_at || "")) {
+      existing.last_seen_at = candidate.last_seen_at;
+    }
+  }
+
+  return [...bySession.values()];
 }
 
 function stateForCandidates(candidates) {

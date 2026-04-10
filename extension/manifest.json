@@ -5,8 +5,12 @@
   "description": "Directly resume local AI coding sessions from supported work-object pages.",
   "host_permissions": [
     "https://www.drupal.org/*",
+    "https://*.atlassian.net/*",
     "http://127.0.0.1:38551/*",
     "http://localhost:38551/*"
+  ],
+  "permissions": [
+    "storage"
   ],
   "background": {
     "service_worker": "background.js"
@@ -14,7 +18,8 @@
   "content_scripts": [
     {
       "matches": [
-        "https://www.drupal.org/*"
+        "https://www.drupal.org/*",
+        "https://*.atlassian.net/*"
       ],
       "js": [
         "content.js"
