@@ -18,24 +18,24 @@ export async function ensureLocalConfig(options = {}) {
 
   const configFile = path.join(storeDir, CONFIG_FILE);
   const existing = await readConfigFile(configFile);
-  const config = normalizeConfig(existing, options);
+  const storedConfig = normalizeStoredConfig(existing, options);
 
-  if (JSON.stringify(existing) !== JSON.stringify(config)) {
-    await writeJson(configFile, config);
+  if (JSON.stringify(existing) !== JSON.stringify(storedConfig)) {
+    await writeJson(configFile, storedConfig);
   }
 
   return {
     storeDir,
     configFile,
-    config,
+    config: applyRuntimeOverrides(storedConfig),
   };
 }
 
 export async function updateLocalConfig(updater, options = {}) {
   const { configFile, config } = await ensureLocalConfig(options);
-  const next = normalizeConfig(await updater({ ...config }), options);
+  const next = normalizeStoredConfig(await updater({ ...config }), options);
   await writeJson(configFile, next);
-  return next;
+  return applyRuntimeOverrides(next);
 }
 
 export async function createPairingToken(options = {}) {
@@ -100,7 +100,7 @@ async function readConfigFile(configFile) {
   }
 }
 
-function normalizeConfig(config, options = {}) {
+function normalizeStoredConfig(config, options = {}) {
   const now = new Date().toISOString();
   const current = config && typeof config === "object" ? config : {};
 
@@ -109,20 +109,35 @@ function normalizeConfig(config, options = {}) {
     machine_id: String(current.machine_id || options.machineId || randomUUID()),
     api_token: String(current.api_token || options.apiToken || randomToken(32)),
     created_at: current.created_at || now,
-    exec: normalizeExecConfig(current.exec),
+    exec: normalizeStoredExecConfig(current.exec),
     pairing_token: current.pairing_token || null,
     pairing_token_expires_at: current.pairing_token_expires_at || null,
   };
 }
 
-function normalizeExecConfig(execConfig = {}) {
-  const envEnabled = process.env.DIRECT_RESUME_EXEC === "1" || process.env.ISSUE_COMPANION_ALLOW_ITERM === "1";
-  const envDisabled = process.env.DIRECT_RESUME_EXEC === "0" || process.env.ISSUE_COMPANION_ALLOW_ITERM === "0";
+function applyRuntimeOverrides(config) {
+  return {
+    ...config,
+    exec: applyExecRuntimeOverrides(config.exec),
+  };
+}
+
+function normalizeStoredExecConfig(execConfig = {}) {
   const terminal = process.env.DIRECT_RESUME_TERMINAL || execConfig.terminal || "terminal";
 
   return {
-    enabled: envDisabled ? false : Boolean(execConfig.enabled || envEnabled),
+    enabled: Boolean(execConfig.enabled),
     terminal,
+  };
+}
+
+function applyExecRuntimeOverrides(execConfig = {}) {
+  const envEnabled = process.env.DIRECT_RESUME_EXEC === "1" || process.env.ISSUE_COMPANION_ALLOW_ITERM === "1";
+  const envDisabled = process.env.DIRECT_RESUME_EXEC === "0" || process.env.ISSUE_COMPANION_ALLOW_ITERM === "0";
+
+  return {
+    ...execConfig,
+    enabled: envDisabled ? false : envEnabled ? true : Boolean(execConfig.enabled),
   };
 }
 

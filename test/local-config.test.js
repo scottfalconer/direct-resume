@@ -47,3 +47,25 @@ test("expired pairing tokens are rejected distinctly", async () => {
   assert.equal(result.ok, false);
   assert.equal(result.reason, "expired");
 });
+
+test("runtime exec env overrides are not persisted to config", async () => {
+  const storeDir = await fs.mkdtemp(path.join(os.tmpdir(), "direct-resume-runtime-exec-"));
+  const prior = process.env.DIRECT_RESUME_EXEC;
+
+  try {
+    process.env.DIRECT_RESUME_EXEC = "1";
+    const effective = await ensureLocalConfig({ storeDir, machineId: "machine-1", apiToken: "api-1" });
+    assert.equal(effective.config.exec.enabled, true);
+
+    const stored = JSON.parse(await fs.readFile(path.join(storeDir, "config.json"), "utf8"));
+    assert.equal(stored.exec.enabled, false);
+  }
+  finally {
+    if (prior === undefined) {
+      delete process.env.DIRECT_RESUME_EXEC;
+    }
+    else {
+      process.env.DIRECT_RESUME_EXEC = prior;
+    }
+  }
+});
