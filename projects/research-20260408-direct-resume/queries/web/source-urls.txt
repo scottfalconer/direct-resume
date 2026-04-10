@@ -1,0 +1,13 @@
+https://raw.githubusercontent.com/iloom-ai/iloom-cli/main/README.md
+https://raw.githubusercontent.com/dandavison/wormhole/master/README.md
+https://developers.openai.com/codex/integrations/linear
+https://code.claude.com/docs/en/memory
+https://docs.coderabbit.ai/issues/planner
+https://memdex.ai/
+https://registry.npmjs.org/direct-resume
+https://registry.npmjs.org/direct-resume-cli
+https://registry.npmjs.org/issue-resume
+https://registry.npmjs.org/resume-anchor
+https://pypi.org/pypi/direct-resume/json
+https://crates.io/api/v1/crates/direct-resume
+

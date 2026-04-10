@@ -1,0 +1,129 @@
+{
+  "as_of": "2026-04-08",
+  "question": "Which current tools are closest to a browser-triggered, local-first, work-object anchored direct resume tool for Codex/Claude sessions?",
+  "items": [
+    {
+      "name": "iloom",
+      "category": "issue-native orchestration",
+      "repo_or_site": "https://github.com/iloom-ai/iloom-cli",
+      "anchor": "external work object",
+      "trigger": "cli and vscode",
+      "storage": "hybrid",
+      "resume": "indirect",
+      "supported_agents": [
+        "Claude Code"
+      ],
+      "browser_extension": false,
+      "local_daemon_or_companion": false,
+      "closest_gap": "Persists plans/analysis/decisions to the tracker and creates isolated work environments, but does not appear to use the browser work-object URL as a direct resume trigger for reopening the exact local prior session.",
+      "confidence": "high",
+      "evidence_path": "data/public/github/iloom-ai_iloom-cli/README.md"
+    },
+    {
+      "name": "Wormhole",
+      "category": "browser URL to local workspace routing",
+      "repo_or_site": "https://github.com/dandavison/wormhole",
+      "anchor": "external work object",
+      "trigger": "browser url",
+      "storage": "local",
+      "resume": "indirect",
+      "supported_agents": [
+        "generic"
+      ],
+      "browser_extension": true,
+      "local_daemon_or_companion": true,
+      "closest_gap": "Very close on browser URL to local context. Adds buttons on JIRA/GitHub pages to jump to task workspaces/tmux/editor, but not to recover the exact prior Codex/Claude session.",
+      "confidence": "high",
+      "evidence_path": "data/public/github/dandavison_wormhole/README.md"
+    },
+    {
+      "name": "CodeRabbit Issue Planner",
+      "category": "issue-native planning",
+      "repo_or_site": "https://docs.coderabbit.ai/issues/planner",
+      "anchor": "external work object",
+      "trigger": "web app / issue workflow",
+      "storage": "cloud",
+      "resume": "indirect",
+      "supported_agents": [
+        "Claude Code",
+        "GitHub Copilot",
+        "generic"
+      ],
+      "browser_extension": false,
+      "local_daemon_or_companion": false,
+      "closest_gap": "Issue-anchored planning and handoff, not direct local session recovery.",
+      "confidence": "medium",
+      "evidence_path": "data/public/coderabbit/issue-planner/index.html"
+    },
+    {
+      "name": "Codex in Linear",
+      "category": "issue-native agent execution",
+      "repo_or_site": "https://developers.openai.com/codex/integrations/linear",
+      "anchor": "external work object",
+      "trigger": "issue workflow",
+      "storage": "cloud",
+      "resume": "none",
+      "supported_agents": [
+        "Codex"
+      ],
+      "browser_extension": false,
+      "local_daemon_or_companion": false,
+      "closest_gap": "Lets users run Codex tasks from Linear issues, but this is issue-native agent execution, not local direct resume into a prior session.",
+      "confidence": "high",
+      "evidence_path": "data/public/openai/codex-linear/index.html"
+    },
+    {
+      "name": "Claude Code memory",
+      "category": "repo/agent memory",
+      "repo_or_site": "https://code.claude.com/docs/en/memory",
+      "anchor": "repo and project context",
+      "trigger": "cli/project context",
+      "storage": "local",
+      "resume": "indirect",
+      "supported_agents": [
+        "Claude Code"
+      ],
+      "browser_extension": false,
+      "local_daemon_or_companion": false,
+      "closest_gap": "Strengthens repo/project memory inside Claude Code, which makes generic repo-memory less differentiated, but it is still not work-object anchored direct resume.",
+      "confidence": "high",
+      "evidence_path": "data/public/anthropic/claude-memory/index.html"
+    },
+    {
+      "name": "Memdex",
+      "category": "cross-ai memory",
+      "repo_or_site": "https://memdex.ai/",
+      "anchor": "user and ai memory",
+      "trigger": "web app / extension style workflow",
+      "storage": "local-first or hybrid",
+      "resume": "indirect",
+      "supported_agents": [
+        "Claude",
+        "ChatGPT",
+        "Gemini",
+        "generic"
+      ],
+      "browser_extension": false,
+      "local_daemon_or_companion": false,
+      "closest_gap": "Closer on cross-tool saved context than on work-object anchored direct local session recovery.",
+      "confidence": "medium",
+      "evidence_path": "data/public/memdex/index.html"
+    }
+  ],
+  "naming_recommendation": {
+    "product_name": "Direct Resume",
+    "core_repo_package": "direct-resume-cli",
+    "alternate_core_repo_package": "direct-resume-core",
+    "connectors": [
+      "direct-resume-drupal",
+      "direct-resume-github"
+    ],
+    "why": [
+      "The phrase matches the actual differentiator.",
+      "Technical suffixes reduce SEO/package ambiguity from generic resume terms.",
+      "Connector package names make the architecture obvious without exposing a broad platform story to users."
+    ],
+    "evidence_path": "data/public/namespace/package-availability.json"
+  }
+}
+

@@ -1,0 +1,32 @@
+{
+  "npm_direct_resume": {
+    "url": "https://registry.npmjs.org/direct-resume",
+    "status": 404,
+    "error": "HTTP Error 404: Not Found"
+  },
+  "npm_direct_resume_cli": {
+    "url": "https://registry.npmjs.org/direct-resume-cli",
+    "status": 404,
+    "error": "HTTP Error 404: Not Found"
+  },
+  "npm_issue_resume": {
+    "url": "https://registry.npmjs.org/issue-resume",
+    "status": 404,
+    "error": "HTTP Error 404: Not Found"
+  },
+  "npm_resume_anchor": {
+    "url": "https://registry.npmjs.org/resume-anchor",
+    "status": 404,
+    "error": "HTTP Error 404: Not Found"
+  },
+  "pypi_direct_resume": {
+    "url": "https://pypi.org/pypi/direct-resume/json",
+    "status": 404,
+    "error": "HTTP Error 404: Not Found"
+  },
+  "crates_direct_resume": {
+    "url": "https://crates.io/api/v1/crates/direct-resume",
+    "status": 403,
+    "error": "HTTP Error 403: Forbidden"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "direct-resume",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node companion/server.js",
+    "test": "node --test test/*.test.js",
+    "check:companion": "node --check companion/server.js && node --check companion/lib/closed-beads.js && node --check companion/lib/issue-context.js && node --check companion/lib/iterm.js",
+    "check:extension": "node --check extension/background.js && node --check extension/content.js",
+    "audit:closed-beads": "node scripts/sync-closed-beads.js",
+    "sync:closed-beads": "node scripts/sync-closed-beads.js --apply"
+  }
+}

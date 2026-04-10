@@ -1,0 +1,89 @@
+{
+  "project": {
+    "id": "research-20260408-direct-resume",
+    "name": "Direct Resume Landscape and Naming Research"
+  },
+  "items": [
+    {
+      "id": "notes-readme",
+      "connector": "local-research-notes",
+      "type": "notes",
+      "src": "projects/research-20260408-direct-resume/README.md",
+      "query_file": "projects/research-20260408-direct-resume/queries/web/source-urls.txt",
+      "command": "Manual synthesis from saved public source snapshots and package checks.",
+      "notes": "Research scope, plan, connector decision matrix, and conclusions."
+    },
+    {
+      "id": "competitor-matrix",
+      "connector": "local-research-notes",
+      "type": "analysis_json",
+      "src": "projects/research-20260408-direct-resume/competitor-matrix.json",
+      "query_file": "projects/research-20260408-direct-resume/queries/web/source-urls.txt",
+      "command": "Manual synthesis into structured comparison matrix.",
+      "notes": "Structured matrix of closest adjacent competitors and naming recommendation."
+    },
+    {
+      "id": "iloom-readme",
+      "connector": "github",
+      "type": "readme_snapshot",
+      "src": "data/public/github/iloom-ai_iloom-cli/README.md",
+      "query_file": "projects/research-20260408-direct-resume/queries/web/source-urls.txt",
+      "command": "curl -L https://raw.githubusercontent.com/iloom-ai/iloom-cli/main/README.md -o data/public/github/iloom-ai_iloom-cli/README.md",
+      "notes": "Primary-source snapshot for iloom positioning and workflow claims."
+    },
+    {
+      "id": "wormhole-readme",
+      "connector": "github",
+      "type": "readme_snapshot",
+      "src": "data/public/github/dandavison_wormhole/README.md",
+      "query_file": "projects/research-20260408-direct-resume/queries/web/source-urls.txt",
+      "command": "curl -L https://raw.githubusercontent.com/dandavison/wormhole/master/README.md -o data/public/github/dandavison_wormhole/README.md",
+      "notes": "Primary-source snapshot showing browser extension and JIRA/GitHub page routing to local workspaces."
+    },
+    {
+      "id": "coderabbit-issue-planner",
+      "connector": "public-web",
+      "type": "html_snapshot",
+      "src": "data/public/coderabbit/issue-planner/index.html",
+      "query_file": "projects/research-20260408-direct-resume/queries/web/source-urls.txt",
+      "command": "curl -L https://docs.coderabbit.ai/issues/planner -o data/public/coderabbit/issue-planner/index.html",
+      "notes": "Official product/docs snapshot for issue-native planning."
+    },
+    {
+      "id": "codex-linear-doc",
+      "connector": "public-web",
+      "type": "html_snapshot",
+      "src": "data/public/openai/codex-linear/index.html",
+      "query_file": "projects/research-20260408-direct-resume/queries/web/source-urls.txt",
+      "command": "curl -L https://developers.openai.com/codex/integrations/linear -o data/public/openai/codex-linear/index.html",
+      "notes": "Official OpenAI docs snapshot for issue-native Codex execution."
+    },
+    {
+      "id": "claude-memory-doc",
+      "connector": "public-web",
+      "type": "html_snapshot",
+      "src": "data/public/anthropic/claude-memory/index.html",
+      "query_file": "projects/research-20260408-direct-resume/queries/web/source-urls.txt",
+      "command": "curl -L https://code.claude.com/docs/en/memory -o data/public/anthropic/claude-memory/index.html",
+      "notes": "Official Anthropic docs snapshot for repo/project memory positioning."
+    },
+    {
+      "id": "memdex-homepage",
+      "connector": "public-web",
+      "type": "html_snapshot",
+      "src": "data/public/memdex/index.html",
+      "query_file": "projects/research-20260408-direct-resume/queries/web/source-urls.txt",
+      "command": "curl -L https://memdex.ai/ -o data/public/memdex/index.html",
+      "notes": "Official Memdex homepage snapshot for cross-AI memory comparison."
+    },
+    {
+      "id": "package-availability",
+      "connector": "package-registries",
+      "type": "json_snapshot",
+      "src": "data/public/namespace/package-availability.json",
+      "query_file": "projects/research-20260408-direct-resume/queries/web/source-urls.txt",
+      "command": "Python urllib requests to npm/PyPI/crates.io endpoints for direct-resume, direct-resume-cli, issue-resume, and resume-anchor.",
+      "notes": "Registry/package availability checks for naming recommendation."
+    }
+  ]
+}
