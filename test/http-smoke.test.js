@@ -37,24 +37,33 @@ test("localhost API pairs, links, resolves, and returns copy resume actions", as
       DIRECT_RESUME_CODEX_HOME: codexHome,
       DIRECT_RESUME_CLAUDE_HOME: claudeHome,
       DIRECT_RESUME_PORT: String(port),
-      DIRECT_RESUME_DISABLE_LEGACY_SYNC: "1",
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
 
   try {
     await waitForHealth(baseUrl, child);
+    const health = await getJson(`${baseUrl}/health`);
+    assert.equal(health.service, "direct-resume");
+    assert.equal("workspaceRoot" in health, false);
 
     const paired = await postJson(`${baseUrl}/api/pair`, {
       pairing_token: "pair-token-1",
     });
     assert.equal(paired.api_token, "api-token-1");
 
+    const legacyDashboard = await fetch(`${baseUrl}/api/dashboard/beads`, {
+      headers: {
+        "Authorization": `Bearer ${paired.api_token}`,
+      },
+    });
+    assert.equal(legacyDashboard.status, 404);
+
     const linkPayload = {
       url: "https://www.drupal.org/project/canvas/issues/3558241",
       agent: "codex",
       session_id: "codex-session-1",
-      workspace_path: "/Users/scott/dev/canvas",
+      workspace_path: "/tmp/direct-resume-canvas",
     };
     const linked = await postJson(`${baseUrl}/api/link`, linkPayload, paired.api_token);
     assert.equal(linked.binding.work_object_id, "drupal:canvas:3558241");
@@ -76,7 +85,7 @@ test("localhost API pairs, links, resolves, and returns copy resume actions", as
       mode: "copy",
     }, paired.api_token);
     assert.equal(resumed.action.type, "copy_command");
-    assert.equal(resumed.action.command, "cd '/Users/scott/dev/canvas' && codex resume codex-session-1");
+    assert.equal(resumed.action.command, "cd '/tmp/direct-resume-canvas' && codex resume codex-session-1");
   }
   finally {
     child.kill();
@@ -113,6 +122,15 @@ async function postJson(url, body, token = null) {
     },
     body: JSON.stringify(body),
   });
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload.error?.message || `Request failed with status ${response.status}`);
+  }
+  return payload;
+}
+
+async function getJson(url) {
+  const response = await fetch(url, { cache: "no-store" });
   const payload = await response.json();
   if (!response.ok) {
     throw new Error(payload.error?.message || `Request failed with status ${response.status}`);

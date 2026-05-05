@@ -39,13 +39,13 @@ test("Claude adapter discovers sessions from sessions-index.json files", async (
     path.join(projectDir, "sessions-index.json"),
     JSON.stringify({
       version: 1,
-      originalPath: "/Users/scott/dev/canvas",
+      originalPath: "/tmp/direct-resume-canvas",
       entries: [
         {
           sessionId: "claude-session-1",
           firstPrompt: "Review https://www.drupal.org/project/canvas/issues/3558241",
           summary: "Canvas issue 3558241 review",
-          projectPath: "/Users/scott/dev/canvas",
+          projectPath: "/tmp/direct-resume-canvas",
           modified: "2026-04-09T11:00:00.000Z",
         },
       ],
@@ -61,7 +61,7 @@ test("Claude adapter discovers sessions from sessions-index.json files", async (
   assert.equal(candidates.length, 1);
   assert.equal(candidates[0].agent, "claude");
   assert.equal(candidates[0].session_id, "claude-session-1");
-  assert.equal(candidates[0].workspace_path, "/Users/scott/dev/canvas");
+  assert.equal(candidates[0].workspace_path, "/tmp/direct-resume-canvas");
 });
 
 test("agent adapters parse resume commands without accepting empty references", () => {
@@ -74,4 +74,24 @@ test("agent adapters parse resume commands without accepting empty references", 
     session_id: "claude-session-1",
   });
   assert.equal(codexAdapter.parseSessionReference("").session_id, null);
+});
+
+test("Codex liveness is unknown rather than stale when an index exists without the explicit session", async () => {
+  const codexHome = await fs.mkdtemp(path.join(os.tmpdir(), "direct-resume-codex-live-"));
+  await fs.writeFile(
+    path.join(codexHome, "session_index.jsonl"),
+    `${JSON.stringify({
+      id: "other-session",
+      thread_name: "Unrelated work",
+      updated_at: "2026-04-09T10:00:00.000Z",
+    })}\n`,
+    "utf8",
+  );
+
+  const liveness = await codexAdapter.isLive({
+    agent: "codex",
+    session_id: "manual-session",
+  }, { codexHome });
+
+  assert.equal(liveness.state, "unknown");
 });

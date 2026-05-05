@@ -26,7 +26,7 @@ const DESCRIPTION_KEYS = new Map([
 export function defaultRoots() {
   const workspaceRoot =
     process.env.ISSUE_COMPANION_WORKSPACE_ROOT ||
-    "/Users/scott/dev/drupal-contrib";
+    path.join(os.homedir(), "dev", "drupal-contrib");
   const codexHome = process.env.ISSUE_COMPANION_CODEX_HOME || path.join(os.homedir(), ".codex");
 
   return {

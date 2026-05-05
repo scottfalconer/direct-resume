@@ -1,5 +1,7 @@
 import http from "node:http";
 import { execFile } from "node:child_process";
+import os from "node:os";
+import path from "node:path";
 import { promisify } from "node:util";
 
 import {
@@ -12,7 +14,7 @@ import {
   isClosedUpstreamStatus,
   syncClosedBeads,
 } from "./lib/closed-beads.js";
-import { detectITermLaunchCapability, openCommandInITerm, shellQuote } from "./lib/iterm.js";
+import { detectITermLaunchCapability, shellQuote } from "./lib/iterm.js";
 import { openCommandInVisibleTerminal, detectTerminalLaunchCapability } from "./lib/terminal.js";
 import { DirectResumeService } from "./core/direct-resume-service.js";
 import {
@@ -28,15 +30,22 @@ import {
 const HOST = process.env.DIRECT_RESUME_HOST || process.env.ISSUE_COMPANION_HOST || "127.0.0.1";
 const PORT = Number(process.env.DIRECT_RESUME_PORT || process.env.ISSUE_COMPANION_PORT || 38551);
 const execFileAsync = promisify(execFile);
-const DORG_SCRIPT = "/Users/scott/.agents/skills/drupal-issue-queue/scripts/dorg.py";
+const DORG_SCRIPT =
+  process.env.ISSUE_COMPANION_DORG_SCRIPT ||
+  path.join(os.homedir(), ".agents", "skills", "drupal-issue-queue", "scripts", "dorg.py");
 const DASHBOARD_CACHE_TTL_MS = 15_000;
 const REMOTE_ISSUE_CACHE_TTL_MS = 30 * 60 * 1000;
 const CLOSED_BEAD_SYNC_INTERVAL_MS = Math.max(
   60_000,
   Number(process.env.ISSUE_COMPANION_CLOSED_BEAD_SYNC_INTERVAL_MS || 60 * 60 * 1000),
 );
-const DISABLE_LEGACY_SYNC = process.env.DIRECT_RESUME_DISABLE_LEGACY_SYNC === "1";
+const ENABLE_LEGACY_DRUPAL =
+  process.env.DIRECT_RESUME_ENABLE_LEGACY_DRUPAL === "1" ||
+  process.env.DIRECT_RESUME_ENABLE_LEGACY_DRUPAL_SYNC === "1";
 const ALLOW_ITERM_LAUNCH = (() => {
+  if (!ENABLE_LEGACY_DRUPAL) {
+    return false;
+  }
   if (process.env.ISSUE_COMPANION_ALLOW_ITERM === "0") {
     return false;
   }
@@ -340,7 +349,7 @@ function buildLaunchCommand(context, body) {
     if (!session) {
       throw new Error("That Codex session is not known for this issue.");
     }
-    return `cd ${shellQuote(roots.workspaceRoot)} && codex --dangerously-bypass-approvals-and-sandbox resume ${session.sessionId}`;
+    return `cd ${shellQuote(roots.workspaceRoot)} && codex resume ${session.sessionId}`;
   }
 
   throw new Error("Unsupported launch action.");
@@ -375,11 +384,9 @@ const server = http.createServer(async (request, response) => {
         service: "direct-resume",
         auth_required: true,
         paired: Boolean(config.api_token),
-        workspaceRoot: roots.workspaceRoot,
         capabilities: {
           can_exec: canExec,
           terminal: config.exec.terminal,
-          canLaunchITerm: ALLOW_ITERM_LAUNCH,
         },
       });
       return;
@@ -464,6 +471,16 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (url.pathname === "/api/dashboard/beads" && !ENABLE_LEGACY_DRUPAL) {
+      errorResponse(response, 404, ERROR_CODES.NOT_FOUND, "Not found.");
+      return;
+    }
+
+    if (issueMatch && !ENABLE_LEGACY_DRUPAL) {
+      errorResponse(response, 404, ERROR_CODES.NOT_FOUND, "Not found.");
+      return;
+    }
+
     if (request.method === "GET" && url.pathname === "/api/dashboard/beads") {
       await maybeSyncClosedBeads();
       jsonResponse(response, 200, {
@@ -518,9 +535,9 @@ const server = http.createServer(async (request, response) => {
 });
 
 server.listen(PORT, HOST, () => {
-  const launchMode = ALLOW_ITERM_LAUNCH ? "enabled" : "disabled";
-  console.log(`Direct Resume companion listening on http://${HOST}:${PORT} (legacy iTerm launch ${launchMode})`);
-  if (!DISABLE_LEGACY_SYNC) {
+  const legacyMode = ENABLE_LEGACY_DRUPAL ? "enabled" : "disabled";
+  console.log(`Direct Resume companion listening on http://${HOST}:${PORT} (legacy Drupal endpoints ${legacyMode})`);
+  if (ENABLE_LEGACY_DRUPAL) {
     void maybeSyncClosedBeads();
     setInterval(() => {
       void maybeSyncClosedBeads();

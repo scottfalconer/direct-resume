@@ -30,13 +30,13 @@ test("upsertLocalBinding writes explicit local session bindings with workspace p
       work_object_id: "drupal:canvas:3558241",
       agent: "codex",
       session_id: "session-1",
-      workspace_path: "/Users/scott/dev/canvas",
+      workspace_path: "/tmp/direct-resume-canvas",
     },
     { storeDir, machineId: "test-machine" },
   );
 
   assert.equal(binding.machine_id, "test-machine");
-  assert.equal(binding.workspace_path, "/Users/scott/dev/canvas");
+  assert.equal(binding.workspace_path, "/tmp/direct-resume-canvas");
   assert.equal(binding.state, "active");
   assert.equal(typeof binding.last_verified_at, "string");
   assert.deepEqual(await readLocalBindings({ storeDir }), [binding]);
@@ -78,7 +78,7 @@ test("updateBindingState marks bindings stale, hidden, or pruned", async () => {
       work_object_id: "drupal:canvas:3558241",
       agent: "codex",
       session_id: "session-1",
-      workspace_path: "/Users/scott/dev/canvas",
+      workspace_path: "/tmp/direct-resume-canvas",
     },
     { storeDir, machineId: "test-machine" },
   );
@@ -100,7 +100,7 @@ test("updateBindingState rejects unsupported lifecycle states", async () => {
       work_object_id: "drupal:canvas:3558241",
       agent: "codex",
       session_id: "session-1",
-      workspace_path: "/Users/scott/dev/canvas",
+      workspace_path: "/tmp/direct-resume-canvas",
     },
     { storeDir, machineId: "test-machine" },
   );

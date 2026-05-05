@@ -4,8 +4,8 @@ const COMPANION_BASE_URLS = [
 ];
 
 const STORAGE_TOKEN_KEY = "direct_resume_api_token";
-const OFFLINE_START_COMMAND = "cd /Users/scott/dev/direct-resume && npm start";
-const SETUP_COMMAND = "cd /Users/scott/dev/direct-resume && npm run setup";
+const OFFLINE_START_COMMAND = "npm start";
+const SETUP_COMMAND = "npm run setup";
 
 async function findHealthyCompanion() {
   for (const baseUrl of COMPANION_BASE_URLS) {

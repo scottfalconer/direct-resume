@@ -48,7 +48,7 @@ test("service links an explicit session and resolves it without exposing raw com
     url: "https://www.drupal.org/project/canvas/issues/3558241",
     agent: "codex",
     session_id: "codex-session-1",
-    workspace_path: "/Users/scott/dev/canvas",
+    workspace_path: "/tmp/direct-resume-canvas",
   };
 
   const linked = await service.link(input);
@@ -72,7 +72,7 @@ test("service resumes candidates through opaque candidate references", async () 
     url: "https://www.drupal.org/project/canvas/issues/3558241",
     agent: "codex",
     session_id: "codex-session-1",
-    workspace_path: "/Users/scott/dev/canvas",
+    workspace_path: "/tmp/direct-resume-canvas",
   });
   const resolved = await service.resolve({
     url: "https://www.drupal.org/project/canvas/issues/3558241",
@@ -84,7 +84,7 @@ test("service resumes candidates through opaque candidate references", async () 
   });
 
   assert.equal(resumed.action.type, "copy_command");
-  assert.equal(resumed.action.command, "cd /Users/scott/dev/canvas && codex resume codex-session-1");
+  assert.equal(resumed.action.command, "cd /tmp/direct-resume-canvas && codex resume codex-session-1");
 });
 
 test("service marks stale explicit bindings instead of returning broken matches", async () => {
@@ -97,7 +97,7 @@ test("service marks stale explicit bindings instead of returning broken matches"
     url: "https://www.drupal.org/project/canvas/issues/3558241",
     agent: "codex",
     session_id: "codex-session-1",
-    workspace_path: "/Users/scott/dev/canvas",
+    workspace_path: "/tmp/direct-resume-canvas",
   });
 
   const staleService = new DirectResumeService({
@@ -122,7 +122,7 @@ test("service resolves DrupalCode GitLab work item URLs to linked Drupal issue s
     url: "https://www.drupal.org/project/ai_context/issues/3586150",
     agent: "codex",
     session_id: "codex-session-1",
-    workspace_path: "/Users/scott/dev/ai_context",
+    workspace_path: "/tmp/direct-resume-ai_context",
   });
 
   const resolved = await service.resolve({

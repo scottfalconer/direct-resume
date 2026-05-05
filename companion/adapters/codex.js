@@ -49,7 +49,7 @@ export const codexAdapter = {
     });
 
     return {
-      state: !sawIndex || found ? "live" : "stale",
+      state: !sawIndex || found ? "live" : "unknown",
       checked_at: new Date().toISOString(),
     };
   },
