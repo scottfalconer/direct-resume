@@ -236,11 +236,8 @@ function detectWorkObjectPage() {
   const href = window.location.href;
 
   if (
-    window.location.hostname === "www.drupal.org" &&
-    (
-      /^\/project\/[^/]+\/issues\/\d+/.test(window.location.pathname) ||
-      /^\/node\/\d+/.test(window.location.pathname)
-    )
+    isSupportedDrupalHost(window.location.hostname) &&
+    isSupportedDrupalPath(window.location.hostname, window.location.pathname)
   ) {
     return {
       url: href,
@@ -264,6 +261,18 @@ function detectWorkObjectPage() {
   }
 
   return null;
+}
+
+function isSupportedDrupalHost(hostname) {
+  return hostname === "www.drupal.org" || hostname === "git.drupalcode.org";
+}
+
+function isSupportedDrupalPath(hostname, pathname) {
+  if (hostname === "www.drupal.org") {
+    return /^\/project\/[^/]+\/issues\/\d+/.test(pathname) || /^\/node\/\d+/.test(pathname);
+  }
+
+  return /^\/project\/[^/]+\/-\/work_items\/\d+/.test(pathname);
 }
 
 function pageMetadata() {

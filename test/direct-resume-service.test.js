@@ -111,3 +111,25 @@ test("service marks stale explicit bindings instead of returning broken matches"
   assert.equal(resolved.state, "no_match");
   assert.equal((await readLocalBindings({ storeDir }))[0].state, "stale");
 });
+
+test("service resolves DrupalCode GitLab work item URLs to linked Drupal issue sessions", async () => {
+  const storeDir = await fs.mkdtemp(path.join(os.tmpdir(), "direct-resume-service-drupalcode-"));
+  const service = new DirectResumeService({
+    adapters: [fakeAdapter()],
+    storeOptions: { storeDir, machineId: "machine-1" },
+  });
+  await service.link({
+    url: "https://www.drupal.org/project/ai_context/issues/3586150",
+    agent: "codex",
+    session_id: "codex-session-1",
+    workspace_path: "/Users/scott/dev/ai_context",
+  });
+
+  const resolved = await service.resolve({
+    url: "https://git.drupalcode.org/project/ai_context/-/work_items/3586150",
+  });
+
+  assert.equal(resolved.work_object.canonical_id, "drupal:ai_context:3586150");
+  assert.equal(resolved.state, "one_match");
+  assert.equal(resolved.candidates[0].match_type, "explicit");
+});

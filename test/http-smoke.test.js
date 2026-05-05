@@ -65,6 +65,12 @@ test("localhost API pairs, links, resolves, and returns copy resume actions", as
     }, paired.api_token);
     assert.equal(resolved.state, "one_match");
 
+    const drupalCodeResolved = await postJson(`${baseUrl}/api/resolve`, {
+      url: "https://git.drupalcode.org/project/canvas/-/work_items/3558241",
+    }, paired.api_token);
+    assert.equal(drupalCodeResolved.work_object.canonical_id, "drupal:canvas:3558241");
+    assert.equal(drupalCodeResolved.state, "one_match");
+
     const resumed = await postJson(`${baseUrl}/api/resume`, {
       candidate_ref: resolved.candidates[0].candidate_ref,
       mode: "copy",

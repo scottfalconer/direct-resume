@@ -34,6 +34,23 @@ test("Drupal connector prefers canonical metadata over node URLs", () => {
   assert.equal(workObject.canonical_url, "https://www.drupal.org/project/canvas/issues/3558241");
 });
 
+test("Drupal connector canonicalizes DrupalCode GitLab work item URLs to the same issue anchor", () => {
+  const workObject = drupalConnector.canonicalize({
+    url: "https://git.drupalcode.org/project/ai_context/-/work_items/3586150",
+    page_title: "Fix AI context issue",
+  });
+
+  assert.equal(workObject.kind, "drupal.issue");
+  assert.equal(workObject.canonical_id, "drupal:ai_context:3586150");
+  assert.equal(workObject.canonical_url, "https://www.drupal.org/project/ai_context/issues/3586150");
+  assert.equal(workObject.display_title, "Fix AI context issue");
+  assert.deepEqual(workObject.metadata, {
+    issue_id: "3586150",
+    project: "ai_context",
+    source_url: "https://git.drupalcode.org/project/ai_context/-/work_items/3586150",
+  });
+});
+
 test("Drupal aliases include strong project evidence and weak bare numeric evidence", () => {
   const workObject = drupalConnector.canonicalize({
     url: "https://www.drupal.org/project/canvas/issues/3558241",
@@ -48,6 +65,10 @@ test("Drupal aliases include strong project evidence and weak bare numeric evide
         value: "https://www.drupal.org/project/canvas/issues/3558241",
       },
       { type: EVIDENCE_TYPES.PROJECT_SCOPED_ID, value: "canvas:3558241" },
+      {
+        type: EVIDENCE_TYPES.CANONICAL_URL,
+        value: "https://git.drupalcode.org/project/canvas/-/work_items/3558241",
+      },
       { type: EVIDENCE_TYPES.BARE_NUMERIC_ID, value: "3558241" },
       { type: EVIDENCE_TYPES.CANONICAL_URL, value: "https://www.drupal.org/node/3558241" },
     ],

@@ -7,6 +7,7 @@ Open a supported issue page in the browser, and Direct Resume shows the local Co
 ## Supported In V0.1
 
 - Drupal.org issue pages, including `https://www.drupal.org/project/<project>/issues/<id>`.
+- DrupalCode GitLab work item pages, including `https://git.drupalcode.org/project/<project>/-/work_items/<id>`.
 - Jira Cloud issue pages on `*.atlassian.net`, including `/browse/PROS-370` style URLs.
 - Local Codex resume actions.
 - Local Claude Code resume actions.

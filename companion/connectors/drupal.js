@@ -2,6 +2,7 @@ import { createEvidence, EVIDENCE_TYPES } from "../core/evidence.js";
 import { createWorkObject, normalizeHost, parseUrl } from "../core/work-object.js";
 
 const DRUPAL_HOST = "www.drupal.org";
+const DRUPALCODE_HOST = "git.drupalcode.org";
 
 export const drupalConnector = {
   source: "drupal",
@@ -17,6 +18,14 @@ export const drupalConnector = {
     const projectSegment = parsed.project ? `project/${parsed.project}/issues` : "node";
     const canonicalUrl = `https://${DRUPAL_HOST}/${projectSegment}/${parsed.issueId}`;
     const projectPart = parsed.project || "node";
+    const metadata = {
+      issue_id: parsed.issueId,
+      project: parsed.project,
+    };
+
+    if (parsed.sourceUrl && parsed.sourceUrl !== canonicalUrl) {
+      metadata.source_url = parsed.sourceUrl;
+    }
 
     return createWorkObject({
       kind: "drupal.issue",
@@ -24,10 +33,7 @@ export const drupalConnector = {
       canonical_url: canonicalUrl,
       display_title: parsed.title || `Drupal issue ${parsed.issueId}`,
       source: "drupal",
-      metadata: {
-        issue_id: parsed.issueId,
-        project: parsed.project,
-      },
+      metadata,
     });
   },
   aliases(workObject) {
@@ -40,6 +46,13 @@ export const drupalConnector = {
     if (project && issueId) {
       evidence.push(
         createEvidence(EVIDENCE_TYPES.PROJECT_SCOPED_ID, `${project}:${issueId}`, "drupal.aliases"),
+      );
+      evidence.push(
+        createEvidence(
+          EVIDENCE_TYPES.CANONICAL_URL,
+          `https://${DRUPALCODE_HOST}/project/${project}/-/work_items/${issueId}`,
+          "drupal.aliases",
+        ),
       );
     }
     if (issueId) {
@@ -83,26 +96,44 @@ function parseDrupalInput(input) {
 
 function parseDrupalUrl(value, title = "") {
   const url = parseUrl(value);
-  if (!url || normalizeHost(url.hostname) !== DRUPAL_HOST) {
+  if (!url) {
     return null;
   }
 
-  const projectMatch = url.pathname.match(/^\/project\/([^/]+)\/issues\/(\d{5,8})(?:\/)?$/);
-  if (projectMatch) {
-    return {
-      issueId: projectMatch[2],
-      project: projectMatch[1],
-      title,
-    };
+  const host = normalizeHost(url.hostname);
+
+  if (host === DRUPAL_HOST) {
+    const projectMatch = url.pathname.match(/^\/project\/([^/]+)\/issues\/(\d{5,8})(?:\/)?$/);
+    if (projectMatch) {
+      return {
+        issueId: projectMatch[2],
+        project: projectMatch[1],
+        title,
+        sourceUrl: url.href,
+      };
+    }
+
+    const nodeMatch = url.pathname.match(/^\/node\/(\d{5,8})(?:\/)?$/);
+    if (nodeMatch) {
+      return {
+        issueId: nodeMatch[1],
+        project: null,
+        title,
+        sourceUrl: url.href,
+      };
+    }
   }
 
-  const nodeMatch = url.pathname.match(/^\/node\/(\d{5,8})(?:\/)?$/);
-  if (nodeMatch) {
-    return {
-      issueId: nodeMatch[1],
-      project: null,
-      title,
-    };
+  if (host === DRUPALCODE_HOST) {
+    const workItemMatch = url.pathname.match(/^\/project\/([^/]+)\/-\/work_items\/(\d{5,8})(?:\/)?$/);
+    if (workItemMatch) {
+      return {
+        issueId: workItemMatch[2],
+        project: workItemMatch[1],
+        title,
+        sourceUrl: url.href,
+      };
+    }
   }
 
   return null;
